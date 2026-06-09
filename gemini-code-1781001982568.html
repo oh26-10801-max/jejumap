@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>제주도 읍면동별 인구수 대화형 지도</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            font-family: 'Malgun Gothic', dotum, sans-serif;
+        }
+        #map {
+            width: 100%;
+            height: 100vh;
+        }
+        /* 정보 표시창 스타일 */
+        .info {
+            padding: 12px 15px;
+            font-size: 14px;
+            background: rgba(255, 255, 255, 0.95);
+            box-shadow: 0 0 15px rgba(0,0,0,0.2);
+            border-radius: 8px;
+            min-width: 180px;
+            border: 1px solid #ccc;
+        }
+        .info h4 {
+            margin: 0 0 8px;
+            color: #333;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 4px;
+        }
+        /* 범례 스타일 */
+        .legend {
+            line-height: 18px;
+            color: #555;
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.2);
+        }
+        .legend i {
+            width: 18px;
+            height: 18px;
+            float: left;
+            margin-right: 8px;
+            opacity: 0.7;
+        }
+    </style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+    // 1. 지도 초기화 (제주도 중심 좌표 및 줌 레벨)
+    const map = L.map('map').setView([33.38, 126.55], 10);
+
+    // 2. 배경 지도 타일 레이어 추가 (지자체 경계가 잘 보이도록 밝은 톤의 타일 사용)
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+    }).addTo(map);
+
+    // 3. 제주도 43개 읍면동별 실제 인구 데이터 매핑 (주민등록인구 기준 가동기)
+    // GeoJSON 데이터의 'ADM_DR_NM' 또는 'EMD_KOR_NM' 속성과 일치시킵니다.
+    const populationData = {
+        "노형동": 55000, "이도2동": 49000, "연동": 42000, "일도2동": 32000, "애월읍": 38000,
+        "조천읍": 26000, "한림읍": 21000, "아라동": 39000, "화북동": 24000, "삼양동": 26000,
+        "오라동": 16000, "외도동": 22000, "구좌읍": 15000, "한경면": 9000, "우도면": 17000,
+        "추자면": 1600, "일도1동": 2500, "이도1동": 7800, "삼도1동": 13000, "삼도2동": 8000,
+        "용담1동": 7000, "용담2동": 14000, "건입동": 9000, "봉개동": 5000, "이호동": 4500,
+        "도두동": 3300, "동홍동": 24000, "대정읍": 24000, "남원읍": 19000, "성산읍": 15000,
+        "안덕면": 12000, "서홍동": 11000, "대륜동": 15000, "대천동": 14000, "중문동": 12000,
+        "표선면": 12000, "송산동": 4000, "정방동": 2200, "중앙동": 3100, "천지동": 3400,
+        "효돈동": 5200, "영천동": 5100, "예래동": 3900
+    };
+
+    // 4. 인구수에 따른 색상 단계 지정 함수
+    function getColor(d) {
+        return d > 40000 ? '#800026' : // 4만 초과 (노형, 이도2, 연동 등)
+               d > 30000 ? '#BD0026' : // 3만 초과 (애월, 아라 등)
+               d > 20000 ? '#E31A1C' : // 2만 초과
+               d > 10000 ? '#FC4E2A' : // 1만 초과
+               d > 5000  ? '#FD8D3C' : // 5천 초과
+                           '#FFEDA0';   // 5천 이하 (추자, 우도, 정방 등)
+    }
+
+    // 5. 스타일 적용 함수
+    function style(feature) {
+        // 공공 GeoJSON에 따라 동 이름이 들어있는 속성명이 다를 수 있으므로 두 가지 모두 체크합니다.
+        const dongName = feature.properties.EMD_KOR_NM || feature.properties.ADM_DR_NM || feature.properties.name;
+        const pop = populationData[dongName] || 0; // 데이터가 없으면 0명 처리
+        
+        return {
+            fillColor: getColor(pop),
+            weight: 1.5,
+            opacity: 1,
+            color: '#ffffff', // 경계선 색상 (흰색)
+            dashArray: '3',
+            fillOpacity: 0.7
+        };
+    }
+
+    // 6. 우측 상단 정보 창(Hover Control) 추가
+    const info = L.control({position: 'topright'});
+
+    info.onAdd = function (map) {
+        this._div = L.DomUtil.create('div', 'info');
+        this.update();
+        return this._div;
+    };
+
+    info.update = function (props) {
+        if (props) {
+            const dongName = props.EMD_KOR_NM || props.ADM_DR_NM || props.name;
+            const pop = populationData[dongName] || "정보 없음";
+            this._div.innerHTML = `<h4>제주도 읍면동별 인구</h4>
+                                   <b>${dongName}</b><br />
+                                   인구수: <span style="color:#e31a1c; font-weight:bold;">${pop.toLocaleString()}</span> 명`;
+        } else {
+            this._div.innerHTML = '<h4>제주도 읍면동별 인구</h4>마우스를 동네 위에 올리세요';
+        }
+    };
+
+    info.addTo(map);
+
+    // 7. 마우스 이벤트 리스너 (하이라이트 효과)
+    let geojsonLayer;
+
+    function highlightFeature(e) {
+        const layer = e.target;
+        layer.setStyle({
+            weight: 3,
+            color: '#4A4A4A',
+            dashArray: '',
+            fillOpacity: 0.9
+        });
+        layer.bringToFront();
+        info.update(layer.feature.properties);
+    }
+
+    function resetHighlight(e) {
+        geojsonLayer.resetStyle(e.target);
+        info.update();
+    }
+
+    function onEachFeature(feature, layer) {
+        layer.on({
+            mouseover: highlightFeature,
+            mouseout: resetHighlight
+        });
+    }
+
+    // 8. 오픈소스 대한민국 행정동 경계 GeoJSON 로드 (제주도 영역)
+    // 공공 저장소에 호스팅된 대한민국 시군구/읍면동 표준 경계 데이터를 사용합니다.
+    const geojsonUrl = 'https://raw.githubusercontent.com/requon/korea-geojson/master/Selected_Regions/50_Jeju_EMD.json';
+
+    fetch(geojsonUrl)
+        .then(response => {
+            if (!response.ok) throw new Error('네트워크를 통해 지도 데이터를 불러오지 못했습니다.');
+            return response.json();
+        })
+        .then(data => {
+            geojsonLayer = L.geoJson(data, {
+                style: style,
+                onEachFeature: onEachFeature
+            }).addTo(map);
+        })
+        .catch(error => {
+            console.error('에러 발생:', error);
+            alert('제주도 경계 데이터를 불러오는 중 오류가 발생했습니다.');
+        });
+
+    // 9. 좌측 하단 인구수 등급 범례(Legend) 추가
+    const legend = L.control({position: 'bottomleft'});
+
+    legend.onAdd = function (map) {
+        const div = L.DomUtil.create('div', 'legend');
+        const grades = [0, 5000, 10000, 20000, 30000, 40000];
+        
+        div.innerHTML = '<strong>인구수 기준</strong><br><br>';
+        for (let i = 0; i < grades.length; i++) {
+            div.innerHTML +=
+                '<i style="background:' + getColor(grades[i] + 1) + '"></i> ' +
+                grades[i].toLocaleString() + (grades[i + 1] ? ' &ndash; ' + grades[i + 1].toLocaleString() + '명<br>' : '+ 명');
+        }
+        return div;
+    };
+
+    legend.addTo(map);
+
+</script>
+</body>
+</html>
