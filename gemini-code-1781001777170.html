@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>제주도 읍면동별 인구수 지도</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Malgun Gothic', dotum, sans-serif;
+        }
+        #map {
+            width: 100vw;
+            height: 100vw;
+            max-height: 100vh;
+        }
+        /* 정보 표시창 스타일 */
+        .info {
+            padding: 12px 15px;
+            font: 14px/16px Arial, Helvetica, sans-serif;
+            background: white;
+            background: rgba(255,255,255,0.9);
+            box-shadow: 0 0 15px rgba(0,0,0,0.2);
+            border-radius: 5px;
+            min-width: 150px;
+        }
+        .info h4 {
+            margin: 0 0 5px;
+            color: #777;
+        }
+    </style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+    // 1. 지도 초기화 (제주도 중심 좌표 설정)
+    const map = L.map('map').setView([33.38, 126.55], 10);
+
+    // 2. 배경 지도 타일 레이어 추가 (CartoDB Positron - 깔끔한 대화형 지도용)
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+    }).addTo(map);
+
+    // 3. 샘플 데이터 (실제 구현 시에는 국가통계포털 등의 행정동 GeoJSON 데이터 사용 필요)
+    // 인구수에 따라 색상을 다르게 지정하기 위한 가상 데이터가 포함되어 있습니다.
+    const jejuDongGeoJSON = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "properties": { "name": "연동", "population": 43000 },
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[[126.48, 33.49], [126.50, 33.49], [126.50, 33.47], [126.48, 33.47], [126.48, 33.49]]]
+                }
+            },
+            {
+                "type": "Feature",
+                "properties": { "name": "이도이동", "population": 50000 },
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[[126.52, 33.50], [126.54, 33.50], [126.54, 33.48], [126.52, 33.48], [126.52, 33.50]]]
+                }
+            },
+            {
+                "type": "Feature",
+                "properties": { "name": "성산읍", "population": 15000 },
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[[126.85, 33.48], [126.93, 33.48], [126.93, 33.43], [126.85, 33.43], [126.85, 33.48]]]
+                }
+            },
+            {
+                "type": "Feature",
+                "properties": { "name": "대정읍", "population": 22000 },
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[[126.22, 33.27], [126.28, 33.27], [126.28, 33.21], [126.22, 33.21], [126.22, 33.27]]]
+                }
+            }
+        ]
+    };
+
+    // 4. 인구수에 따른 동네 색상 지정 함수
+    function getColor(d) {
+        return d > 45000 ? '#800026' :
+               d > 30000 ? '#BD0026' :
+               d > 20000 ? '#E31A1C' :
+               d > 10000 ? '#FC4E2A' :
+                           '#FFEDA0';
+    }
+
+    // 5. 기본 스타일 지정 함수
+    function style(feature) {
+        return {
+            fillColor: getColor(feature.properties.population),
+            weight: 2,
+            opacity: 1,
+            color: 'white',
+            dashArray: '3',
+            fillOpacity: 0.7
+        };
+    }
+
+    // 6. 우측 상단 정보 표시 컨트롤 추가
+    const info = L.control({position: 'topright'});
+
+    info.onAdd = function (map) {
+        this._div = L.DomUtil.create('div', 'info');
+        this.update();
+        return this._div;
+    };
+
+    info.update = function (props) {
+        this._div.innerHTML = '<h4>제주도 읍면동별 인구</h4>' +  (props ?
+            '<b>' + props.name + '</b><br />' + props.population.toLocaleString() + ' 명'
+            : '동네 위에 마우스를 올리세요');
+    };
+
+    info.addTo(map);
+
+    // 7. 마우스 이벤트 리스너 정의 (Hover 효과)
+    let geojsonLayer;
+
+    function highlightFeature(e) {
+        const layer = e.target;
+
+        layer.setStyle({
+            weight: 3,
+            color: '#666',
+            dashArray: '',
+            fillOpacity: 0.9
+        });
+
+        layer.bringToFront();
+        info.update(layer.feature.properties); // 정보창 업데이트
+    }
+
+    function resetHighlight(e) {
+        geojsonLayer.resetStyle(e.target);
+        info.update(); // 정보창 리셋
+    }
+
+    function onEachFeature(feature, layer) {
+        layer.on({
+            mouseover: highlightFeature,
+            mouseout: resetHighlight
+        });
+    }
+
+    // 8. GeoJSON 레이어를 지도에 추가
+    geojsonLayer = L.geoJson(jejuDongGeoJSON, {
+        style: style,
+        onEachFeature: onEachFeature
+    }).addTo(map);
+
+</script>
+</body>
+</html>
